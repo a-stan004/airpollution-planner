@@ -40,7 +40,7 @@ geo_target = geocodeaddresses(targetplace)
 
 
 # ==========================================================================
-# Constructing a route between the locations
+# Constructing a graph for the area
 # ==========================================================================
 
 # Puts the locations into a pandas dataframe
@@ -63,8 +63,19 @@ box = gdf.unary_union.envelope
 buffbox = box.buffer(0.01)
 
 # Drawing the graph using OSMnx
-graph = ox.graph_from_polygon(buffbox, network_type='bike', truncate_by_edge=False, retain_all=True)
-fig, ax = ox.plot_graph(graph)
+graph = ox.graph_from_polygon(buffbox, network_type='walk', truncate_by_edge=False, retain_all=True)
+# fig, ax = ox.plot_graph(graph)
 
+# ==========================================================================
+# Drawing an initial route between locations
+# ==========================================================================
+
+
+orig_node = ox.nearest_nodes(graph, geo_inital[2], geo_inital[1])
+target_node = ox.nearest_nodes(graph, geo_target[2], geo_target[1])
+
+route = nx.shortest_path(G=graph, source=orig_node, target=target_node, weight='distance')
+
+fig, ax = ox.plot_graph_route(graph, route)
 
 
