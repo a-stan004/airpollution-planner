@@ -168,3 +168,4 @@ fig, ax = ox.plot_graph_route(graph, route)
 
 nodes, edges = ox.graph_to_gdfs(graph, nodes=True, edges=True)
 route_nodes = nodes.loc[route]
+
