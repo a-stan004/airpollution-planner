@@ -11,8 +11,8 @@ from shapely.geometry import box
 # ==========================================================================
 
 # Variables created to store placenames
-initalplace = input("Enter a starting place")
-targetplace = input("Enter a finishing place")
+initalplace = "WS79LQ"
+targetplace = "WS79JP"
 
 
 # Address locator is set up to geocode locations using geopy nominatim
@@ -75,7 +75,15 @@ orig_node = ox.nearest_nodes(graph, geo_inital[2], geo_inital[1])
 target_node = ox.nearest_nodes(graph, geo_target[2], geo_target[1])
 
 route = nx.shortest_path(G=graph, source=orig_node, target=target_node, weight='distance')
-
 fig, ax = ox.plot_graph_route(graph, route)
+
+# ==========================================================================
+# Gathering locations of nodes along route and checking pollution values
+# ==========================================================================
+
+nodes, edges = ox.graph_to_gdfs(graph, nodes=True, edges=True)
+route_nodes = nodes.loc[route]
+
+
 
 
