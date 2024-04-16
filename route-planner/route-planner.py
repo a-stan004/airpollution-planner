@@ -6,8 +6,6 @@ import pandas as pd
 from geopy import Nominatim
 from airpollutionAPI import PointQuality
 
-a = PointQuality()
-
 # ==========================================================================
 # Gathering inputs and geocoding
 # ==========================================================================
