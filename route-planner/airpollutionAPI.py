@@ -49,6 +49,7 @@ class PointQuality:
         return pollutantvalue
 
 
+# Test functionality to ensure class method is successful
 point1 = PointQuality(52.679935, -1.921781, "82f376a18ef0356724cdaeed7d4d390e")
 
 
