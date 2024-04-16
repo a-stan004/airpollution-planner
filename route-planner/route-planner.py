@@ -4,6 +4,9 @@ import geopandas as gpd
 # import matplotlib.pyplot as plt
 import pandas as pd
 from geopy import Nominatim
+from airpollutionAPI import PointQuality
+
+a = PointQuality()
 
 # ==========================================================================
 # Gathering inputs and geocoding
@@ -168,4 +171,6 @@ fig, ax = ox.plot_graph_route(graph, route)
 
 nodes, edges = ox.graph_to_gdfs(graph, nodes=True, edges=True)
 route_nodes = nodes.loc[route]
+print(route_nodes)
+print(type(route_nodes))
 
