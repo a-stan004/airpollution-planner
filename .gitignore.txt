@@ -1,3 +1,5 @@
+#=====================Gitignore.io Output=================================
+
 # Created by https://www.toptal.com/developers/gitignore/api/windows,python,visualstudiocode,pycharm
 # Edit at https://www.toptal.com/developers/gitignore?templates=windows,python,visualstudiocode,pycharm
 
@@ -11,7 +13,6 @@
 .idea/**/usage.statistics.xml
 .idea/**/dictionaries
 .idea/**/shelf
-.idea\workspace.xml
 
 # AWS User-specific
 .idea/**/aws.xml
@@ -333,3 +334,10 @@ $RECYCLE.BIN/
 *.lnk
 
 # End of https://www.toptal.com/developers/gitignore/api/windows,python,visualstudiocode,pycharm
+
+#=====================Additional=================================
+
+*.xml
+*.json
+.idea/
+cache/
