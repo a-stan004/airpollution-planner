@@ -341,3 +341,4 @@ $RECYCLE.BIN/
 *.json
 .idea/
 cache/
+*.pyc

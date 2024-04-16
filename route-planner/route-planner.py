@@ -6,6 +6,21 @@ import pandas as pd
 from geopy import Nominatim
 from airpollutionAPI import PointQuality
 
+# Key for API
+apikey = "82f376a18ef0356724cdaeed7d4d390e"
+
+# Safe limits for air pollution 2021 and 2005 WHO
+WHO2021 = {
+    "pm2.5": 5,
+    "pm10": 15,
+    "no2": 10
+}
+WHO2005 = {
+    "pm2.5": 10,
+    "pm10": 20,
+    "no2": 40
+}
+
 # ==========================================================================
 # Gathering inputs and geocoding
 # ==========================================================================
@@ -60,7 +75,7 @@ class Inputs:
 
 
 # Creates class instance of Inputs with two user inputs
-userinputs = Inputs("WS79LQ", "WS79JP")
+userinputs = Inputs("B297DW", "B46NH")
 
 geo_initial = userinputs.geocodeaddresses()[0]
 geo_target = userinputs.geocodeaddresses()[1]
@@ -68,6 +83,7 @@ geo_target = userinputs.geocodeaddresses()[1]
 # ==========================================================================
 # Constructing a graph for the area
 # ==========================================================================
+
 
 class Locations:
     """
@@ -155,20 +171,34 @@ buffbox = box.buffer(0.01)
 graph = ox.graph_from_polygon(buffbox, network_type='walk', truncate_by_edge=False, retain_all=True)
 
 # ==========================================================================
-# Drawing an initial route between locations
+# Drawing route between locations, check pollution values and redraw
 # ==========================================================================
 
-nodes = userlocations.getnodes()
 
-route = nx.shortest_path(G=graph, source=nodes[0], target=nodes[1], weight='distance')
-fig, ax = ox.plot_graph_route(graph, route)
-
-# ==========================================================================
-# Gathering locations of nodes along route and checking pollution values
-# ==========================================================================
-
+route = []
+usernodes = userlocations.getnodes()
 nodes, edges = ox.graph_to_gdfs(graph, nodes=True, edges=True)
-route_nodes = nodes.loc[route]
-print(route_nodes)
-print(type(route_nodes))
+avoid_nodes = []
+pollution_status = False
 
+while not pollution_status:
+
+    route = nx.shortest_path(G=graph, source=usernodes[0], target=usernodes[1], weight='distance')
+    route_nodes = nodes.loc[route]
+
+    for index, row in route_nodes.iterrows():
+        x_coord = row['x']
+        y_coord = row['y']
+        point = PointQuality(y_coord, x_coord, apikey)
+        pm2_5 = point.pollutionvalues("pm2_5")
+        pm10 = point.pollutionvalues("pm10")
+        no2 = point.pollutionvalues("no2")
+        # print("Break", pm2_5, pm10, no2)
+
+        if pm2_5 > WHO2021["pm2.5"] or pm10 > WHO2021["pm10"] or no2 > WHO2021["no2"]:
+            avoid_nodes.append(index)
+            graph.remove_node(avoid_nodes)
+        else:
+            pollution_status = True
+
+fig, ax = ox.plot_graph_route(graph, route)
