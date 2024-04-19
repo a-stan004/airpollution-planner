@@ -192,9 +192,11 @@ while not pollution_status:
         no2 = obtainvalue(y_coord, x_coord, "no2")
         # print("Break", pm2_5, pm10, no2)
 
-        if pm2_5 > WHO2021["pm2.5"] or pm10 > WHO2021["pm10"] or no2 > WHO2021["no2"]:
-            graph.remove_node(index)
-        else:
-            pollution_status = True
+        if index != usernodes[0] and index != usernodes[1]:
+
+            if pm2_5 > WHO2005["pm2.5"] or pm10 > WHO2005["pm10"] or no2 > WHO2005["no2"]:
+                graph.remove_node(index)
+            else:
+                pollution_status = True
 
 fig, ax = ox.plot_graph_route(graph, route)
