@@ -5,9 +5,7 @@ import geopandas as gpd
 import pandas as pd
 from geopy import Nominatim
 from airpollutionAPI import PointQuality
-
-# Key for API
-apikey = "82f376a18ef0356724cdaeed7d4d390e"
+from raster import obtainvalue
 
 # Safe limits for air pollution 2021 and 2005 WHO
 WHO2021 = {
@@ -75,7 +73,7 @@ class Inputs:
 
 
 # Creates class instance of Inputs with two user inputs
-userinputs = Inputs("B297DW", "B46NH")
+userinputs = Inputs("NW1 2DB", "WC1B 5EH")
 
 geo_initial = userinputs.geocodeaddresses()[0]
 geo_target = userinputs.geocodeaddresses()[1]
@@ -169,6 +167,7 @@ buffbox = box.buffer(0.01)
 
 # Constructing the graph using OSMnx
 graph = ox.graph_from_polygon(buffbox, network_type='walk', truncate_by_edge=False, retain_all=True)
+fig, ax = ox.plot_graph(graph)
 
 # ==========================================================================
 # Drawing route between locations, check pollution values and redraw
@@ -178,7 +177,6 @@ graph = ox.graph_from_polygon(buffbox, network_type='walk', truncate_by_edge=Fal
 route = []
 usernodes = userlocations.getnodes()
 nodes, edges = ox.graph_to_gdfs(graph, nodes=True, edges=True)
-avoid_nodes = []
 pollution_status = False
 
 while not pollution_status:
@@ -189,15 +187,13 @@ while not pollution_status:
     for index, row in route_nodes.iterrows():
         x_coord = row['x']
         y_coord = row['y']
-        point = PointQuality(y_coord, x_coord, apikey)
-        pm2_5 = point.pollutionvalues("pm2_5")
-        pm10 = point.pollutionvalues("pm10")
-        no2 = point.pollutionvalues("no2")
+        pm2_5 = obtainvalue(y_coord, x_coord, "pm2.5")
+        pm10 = obtainvalue(y_coord, x_coord, "pm10")
+        no2 = obtainvalue(y_coord, x_coord, "no2")
         # print("Break", pm2_5, pm10, no2)
 
         if pm2_5 > WHO2021["pm2.5"] or pm10 > WHO2021["pm10"] or no2 > WHO2021["no2"]:
-            avoid_nodes.append(index)
-            graph.remove_node(avoid_nodes)
+            graph.remove_node(index)
         else:
             pollution_status = True
 
