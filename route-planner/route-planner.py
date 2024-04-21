@@ -73,7 +73,7 @@ class Inputs:
 
 
 # Creates class instance of Inputs with two user inputs
-userinputs = Inputs("NW1 2DB", "WC1B 5EH")
+userinputs = Inputs("London Marylebone", "London Paddington")
 
 geo_initial = userinputs.geocodeaddresses()[0]
 geo_target = userinputs.geocodeaddresses()[1]
@@ -169,6 +169,7 @@ buffbox = box.buffer(0.01)
 graph = ox.graph_from_polygon(buffbox, network_type='walk', truncate_by_edge=False, retain_all=True)
 fig, ax = ox.plot_graph(graph)
 
+
 # ==========================================================================
 # Drawing route between locations, check pollution values and redraw
 # ==========================================================================
@@ -179,6 +180,10 @@ usernodes = userlocations.getnodes()
 nodes, edges = ox.graph_to_gdfs(graph, nodes=True, edges=True)
 pollution_status = False
 
+routes = ox.k_shortest_paths(G=graph, orig=usernodes[0], dest=usernodes[1], k=100, weight="length")
+fig, ax = ox.plot_graph_routes(G=graph, routes=list(routes), route_colors="y", route_linewidth=4, node_size=0)
+
+'''
 while not pollution_status:
 
     route = nx.shortest_path(G=graph, source=usernodes[0], target=usernodes[1], weight='distance')
@@ -200,3 +205,4 @@ while not pollution_status:
                 pollution_status = True
 
 fig, ax = ox.plot_graph_route(graph, route)
+'''
