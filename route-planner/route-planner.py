@@ -10,6 +10,11 @@ from airpollutionAPI import PointQuality
 from raster import obtainvalue
 
 # Safe limits for air pollution 2021 and 2005 WHO
+WHO2025 = {
+    "pm2.5": 1,
+    "pm10": 5,
+    "no2": 3
+}
 WHO2021 = {
     "pm2.5": 5,
     "pm10": 15,
@@ -75,7 +80,7 @@ class Inputs:
 
 
 # Creates class instance of Inputs with two user inputs
-userinputs = Inputs("London Marylebone", "London Paddington")
+userinputs = Inputs("London Paddington", "London Euston")
 
 geo_initial = userinputs.geocodeaddresses()[0]
 geo_target = userinputs.geocodeaddresses()[1]
@@ -173,50 +178,67 @@ graph = ox.graph_from_polygon(buffbox, network_type='walk', truncate_by_edge=Fal
 # ==========================================================================
 # Drawing route between locations, check pollution values and redraw
 # ==========================================================================
-successfulroute = False
+
+pm2_5value = float(WHO2005["pm2.5"])
+pm10value = float(WHO2005["pm10"])
+no2value = float(WHO2005["no2"])
+bounds = ox.graph_from_polygon(buffbox, network_type='walk', truncate_by_edge=False, retain_all=True)
+nodes, edges = ox.graph_to_gdfs(bounds, nodes=True, edges=True)
+usernodes = userlocations.getnodes()
+
+ogroute = nx.shortest_path(G=bounds, source=usernodes[0], target=usernodes[1], weight='distance')
+fig, ax = ox.plot_graph_route(bounds, ogroute)
+
+updatedroute = nx.shortest_path(G=bounds, source=usernodes[0], target=usernodes[1], weight='distance')
+nodecount = 1
 
 
-def routeattempt(bounds, limits, locations):
+def removenodes(bounds, newroute, p_pm2_5value, p_pm10value, p_no2value, count):
     pollution_status = False
-    pm2_5value = float(limits["pm2.5"])
-    pm10value = float(limits["pm10"])
-    no2value = float(limits["no2"])
-    removed_nodes = []
+    if count >= 1:
+        count = 0
 
     while not pollution_status:
-        try:
-            area = ox.graph_from_polygon(bounds, network_type='walk', truncate_by_edge=False, retain_all=True)
-            nodes, edges = ox.graph_to_gdfs(area, nodes=True, edges=True)
-            usernodes = locations.getnodes()
-            newroute = nx.shortest_path(G=area, source=usernodes[0], target=usernodes[1], weight='distance')
-            route_nodes = nodes.loc[newroute]
 
-            for index, row in route_nodes.iterrows():
-                x_coord = row['x']
-                y_coord = row['y']
-                pm2_5 = obtainvalue(y_coord, x_coord, "pm2.5")
-                pm10 = obtainvalue(y_coord, x_coord, "pm10")
-                no2 = obtainvalue(y_coord, x_coord, "no2")
+        route_nodes = nodes.loc[newroute]
+        print("Route made")
 
-                if index != usernodes[0] and index != usernodes[1]:
-                    if pm2_5 > pm2_5value or pm10 > pm10value or no2 > no2value:
-                        removed_nodes.append(index)
+        for index, row in route_nodes.iterrows():
+            x_coord = row['x']
+            y_coord = row['y']
+            pm2_5 = obtainvalue(y_coord, x_coord, "pm2.5")
+            pm10 = obtainvalue(y_coord, x_coord, "pm10")
+            no2 = obtainvalue(y_coord, x_coord, "no2")
 
-            pollution_status = True
+            if index != usernodes[0] and index != usernodes[1]:
+                if pm2_5 > p_pm2_5value or pm10 > p_pm10value or no2 > p_no2value:
+                    bounds.remove_node(index)
+                    print("Node removed")
+                    count += 1
 
-        except NetworkXNoPath:
-            pm2_5value *= 1.05
-            pm10value *= 1.05
-            no2value *= 1.05
+        pollution_status = True
 
-    routesuccess = True
-    return routesuccess, route, area
+    return bounds, nodecount
+
+def retry(bounds, updatedroute, pm2_5value, pm10value, no2value, nodecount, nodes, edges):
+    try:
+        while nodecount != 0:
+            boundsremoved = removenodes(bounds, updatedroute, pm2_5value, pm10value, no2value, nodecount)[0]
+            updatedroute = nx.shortest_path(G=boundsremoved, source=usernodes[0], target=usernodes[1], weight='distance')
+            print("Route attempt")
+    except NetworkXNoPath:
+        pm2_5value *= 1.5
+        pm10value *= 1.5
+        no2value *= 1.5
+        bounds = ox.graph_from_polygon(buffbox, network_type='walk', truncate_by_edge=False, retain_all=True)
+        nodes, edges = ox.graph_to_gdfs(bounds, nodes=True, edges=True)
+        print("Error, redrawing graph and upping bounds")
+        print(pm2_5value, pm10value, no2value)
+        retry(bounds, updatedroute, pm2_5value, pm10value, no2value, nodecount, nodes, edges)
 
 
-while not successfulroute:
-    successfulroute = routeattempt(buffbox, WHO2005, userlocations)[0]
-    route = routeattempt(buffbox, WHO2005, userlocations)[1]
-    grapharea = routeattempt(buffbox, WHO2005, userlocations)[2]
-else:
-    print("Found route")
-    fig, ax = ox.plot_graph_route(grapharea, route)
+retry(bounds, updatedroute, pm2_5value, pm10value, no2value, nodecount, nodes, edges)
+
+print("Found route")
+print(pm2_5value, pm10value, no2value)
+fig, ax = ox.plot_graph_route(bounds, updatedroute)
