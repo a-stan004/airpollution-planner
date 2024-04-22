@@ -4,6 +4,8 @@ import geopandas as gpd
 # import matplotlib.pyplot as plt
 import pandas as pd
 from geopy import Nominatim
+from networkx import NetworkXNoPath
+
 from airpollutionAPI import PointQuality
 from raster import obtainvalue
 
@@ -167,42 +169,54 @@ buffbox = box.buffer(0.01)
 
 # Constructing the graph using OSMnx
 graph = ox.graph_from_polygon(buffbox, network_type='walk', truncate_by_edge=False, retain_all=True)
-fig, ax = ox.plot_graph(graph)
-
 
 # ==========================================================================
 # Drawing route between locations, check pollution values and redraw
 # ==========================================================================
+successfulroute = False
 
 
-route = []
-usernodes = userlocations.getnodes()
-nodes, edges = ox.graph_to_gdfs(graph, nodes=True, edges=True)
-pollution_status = False
+def routeattempt(bounds, limits, locations):
+    pollution_status = False
+    pm2_5value = float(limits["pm2.5"])
+    pm10value = float(limits["pm10"])
+    no2value = float(limits["no2"])
+    removed_nodes = []
 
-routes = ox.k_shortest_paths(G=graph, orig=usernodes[0], dest=usernodes[1], k=100, weight="length")
-fig, ax = ox.plot_graph_routes(G=graph, routes=list(routes), route_colors="y", route_linewidth=4, node_size=0)
+    while not pollution_status:
+        try:
+            area = ox.graph_from_polygon(bounds, network_type='walk', truncate_by_edge=False, retain_all=True)
+            nodes, edges = ox.graph_to_gdfs(area, nodes=True, edges=True)
+            usernodes = locations.getnodes()
+            newroute = nx.shortest_path(G=area, source=usernodes[0], target=usernodes[1], weight='distance')
+            route_nodes = nodes.loc[newroute]
 
-'''
-while not pollution_status:
+            for index, row in route_nodes.iterrows():
+                x_coord = row['x']
+                y_coord = row['y']
+                pm2_5 = obtainvalue(y_coord, x_coord, "pm2.5")
+                pm10 = obtainvalue(y_coord, x_coord, "pm10")
+                no2 = obtainvalue(y_coord, x_coord, "no2")
 
-    route = nx.shortest_path(G=graph, source=usernodes[0], target=usernodes[1], weight='distance')
-    route_nodes = nodes.loc[route]
+                if index != usernodes[0] and index != usernodes[1]:
+                    if pm2_5 > pm2_5value or pm10 > pm10value or no2 > no2value:
+                        removed_nodes.append(index)
 
-    for index, row in route_nodes.iterrows():
-        x_coord = row['x']
-        y_coord = row['y']
-        pm2_5 = obtainvalue(y_coord, x_coord, "pm2.5")
-        pm10 = obtainvalue(y_coord, x_coord, "pm10")
-        no2 = obtainvalue(y_coord, x_coord, "no2")
-        # print("Break", pm2_5, pm10, no2)
+            pollution_status = True
 
-        if index != usernodes[0] and index != usernodes[1]:
+        except NetworkXNoPath:
+            pm2_5value *= 1.05
+            pm10value *= 1.05
+            no2value *= 1.05
 
-            if pm2_5 > WHO2005["pm2.5"] or pm10 > WHO2005["pm10"] or no2 > WHO2005["no2"]:
-                graph.remove_node(index)
-            else:
-                pollution_status = True
+    routesuccess = True
+    return routesuccess, route, area
 
-fig, ax = ox.plot_graph_route(graph, route)
-'''
+
+while not successfulroute:
+    successfulroute = routeattempt(buffbox, WHO2005, userlocations)[0]
+    route = routeattempt(buffbox, WHO2005, userlocations)[1]
+    grapharea = routeattempt(buffbox, WHO2005, userlocations)[2]
+else:
+    print("Found route")
+    fig, ax = ox.plot_graph_route(grapharea, route)
