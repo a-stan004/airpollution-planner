@@ -217,15 +217,23 @@ def removenodes(bounds, newroute, p_pm2_5value, p_pm10value, p_no2value, count):
                     count += 1
 
         pollution_status = True
+        if nodecount >= 1:
+            successful = False
+        else:
+            successful = True
 
-    return bounds, nodecount
+    return bounds, nodecount, successful
 
-def retry(bounds, updatedroute, pm2_5value, pm10value, no2value, nodecount, nodes, edges):
+
+success = False
+
+while not success:
     try:
         while nodecount != 0:
             boundsremoved = removenodes(bounds, updatedroute, pm2_5value, pm10value, no2value, nodecount)[0]
             updatedroute = nx.shortest_path(G=boundsremoved, source=usernodes[0], target=usernodes[1], weight='distance')
             print("Route attempt")
+            success = removenodes(bounds, updatedroute, pm2_5value, pm10value, no2value, nodecount)[2]
     except NetworkXNoPath:
         pm2_5value *= 1.5
         pm10value *= 1.5
@@ -234,10 +242,6 @@ def retry(bounds, updatedroute, pm2_5value, pm10value, no2value, nodecount, node
         nodes, edges = ox.graph_to_gdfs(bounds, nodes=True, edges=True)
         print("Error, redrawing graph and upping bounds")
         print(pm2_5value, pm10value, no2value)
-        retry(bounds, updatedroute, pm2_5value, pm10value, no2value, nodecount, nodes, edges)
-
-
-retry(bounds, updatedroute, pm2_5value, pm10value, no2value, nodecount, nodes, edges)
 
 print("Found route")
 print(pm2_5value, pm10value, no2value)
