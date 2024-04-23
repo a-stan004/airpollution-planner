@@ -2,7 +2,7 @@ import sys
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QMessageBox
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-# import script
+import routeplanner
 
 
 class MyWindow(QWidget):
@@ -49,7 +49,7 @@ class MyWindow(QWidget):
         end = self.input2_text.text()
 
         try:
-            fig, ax = your_script.run(start, end)
+            fig, ax = routeplanner.run(start, end)
 
             self.figure_canvas.figure.clear()
 

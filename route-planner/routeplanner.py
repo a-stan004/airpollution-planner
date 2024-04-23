@@ -1,22 +1,16 @@
 import osmnx as ox
+from osmnx import routing
+from osmnx import folium
 import networkx as nx
 import geopandas as gpd
 import pandas as pd
 from geopy import Nominatim
 from networkx import NetworkXNoPath
 from raster import obtainvalue
+import folium
 
-# Safe limits for air pollution 2021 and 2005 WHO
-WHO2025 = {
-    "pm2_5": 1,
-    "pm10": 5,
-    "no2": 3
-}
-WHO2021 = {
-    "pm2_5": 5,
-    "pm10": 15,
-    "no2": 10
-}
+
+# Safe limits for air pollution 2005 WHO
 WHO2005 = {
     "pm2_5": 10,
     "pm10": 20,
@@ -76,8 +70,11 @@ class Inputs:
         return geocodeinit, geocodetarget
 
 
+start = "London Marylebone Station"
+end = "London Paddington Station"
+
 # Creates class instance of Inputs with two user inputs
-userinputs = Inputs("Wembley Stadium", "Tower Bridge")
+userinputs = Inputs(start, end)
 
 geo_initial = userinputs.geocodeaddresses()[0]
 geo_target = userinputs.geocodeaddresses()[1]
@@ -176,6 +173,7 @@ graph = ox.graph_from_polygon(buffbox, network_type='bike', truncate_by_edge=Fal
 usernodes = userlocations.getnodes()
 route = nx.shortest_path(G=graph, source=usernodes[0], target=usernodes[1], weight="distance")
 fig, ax = ox.plot_graph_route(graph, route)
+
 
 # Get initial limiter values
 print("Start path finding ...")
@@ -322,3 +320,117 @@ while not valid_path:
 print("Path found")
 fig, ax = ox.plot_graph_route(graph, attempt)
 
+
+# Coloring of routes and drawing to folium
+def edgepollution(figgraph, figroute):
+    """
+    Takes a route and its associated graph, and returns an index of pollution based on three pollutants for each edge
+    Requires obtainvalue() script from raster.py
+
+    Args
+        figgraph (MultiDiGraph): OSMnx pre-built graph as input
+        figroute (list): OSMnx list of node values constructed using routing module
+    Returns
+        route_values (dict):
+            'edges': Edge number
+            'values': Pollutant index
+    """
+    edges = ox.routing.route_to_gdf(figgraph, figroute, weight='length')
+    nodes = ox.graph_to_gdfs(figgraph, nodes=True, edges=False)
+    for index, edge in edges.iterrows():
+        node1num = index[0]
+        node2num = index[1]
+        node1 = nodes.loc[node1num]
+        node2 = nodes.loc[node2num]
+        n1v1 = obtainvalue(node1['y'], node1['x'], 'PM2.5')
+        n1v2 = obtainvalue(node1['y'], node1['x'], 'PM10')
+        n1v3 = obtainvalue(node1['y'], node1['x'], 'NO2')
+        node1avg = (n1v1 + n1v2 + n1v3) / 3
+        n2v1 = obtainvalue(node2['y'], node2['x'], 'PM2.5')
+        n2v2 = obtainvalue(node2['y'], node2['x'], 'PM10')
+        n2v3 = obtainvalue(node2['y'], node2['x'], 'NO2')
+        node2avg = (n2v1 + n2v2 + n2v3) / 3
+        edges.at[index, 'avgvalue'] = (node1avg + node2avg) / 2
+        route_values = {'edges': figroute, 'values': edges['avgvalue'].tolist()}
+    return route_values
+
+
+edges_values = edgepollution(graph, route)
+alt_edges_values = edgepollution(graph, attempt)
+
+
+def colorpicker(value):
+    if value < 10:
+        color = "#40b81c"
+    elif value < 20:
+        color = "#d1d119"
+    elif value < 30:
+        color = "#d1a619"
+    elif value < 40:
+        color = "#d14419"
+    elif value < 50:
+        color = "#9c1919"
+    elif value < 60:
+        color = "#3d0101"
+    else:
+        color = "#000000"
+    return color
+
+
+def drawfig(foliumgraph, foliumroute, foliumalt):
+    """
+    Takes two routes and their associated graph, and constructs a folium map
+    Requires obtainvalue() script from raster.py
+
+    Args
+        figgraph (MultiDiGraph): OSMnx pre-built graph as input
+        figroute (list): OSMnx list of node values constructed using routing module
+    Returns
+        map (.html): Saves a html file of final route
+    """
+    originedges = ox.routing.route_to_gdf(foliumgraph, foliumroute['edges'], weight='length')
+    originedges['value'] = foliumroute['values']
+
+    alternateedges = ox.routing.route_to_gdf(foliumgraph, foliumalt['edges'], weight='length')
+    alternateedges['value'] = foliumalt['values']
+
+    center = [originedges.iloc[0]['geometry'].centroid.y, originedges.iloc[0]['geometry'].centroid.x]
+    m = folium.Map(
+        location=center,
+        zoom_start=13,
+        tiles="cartodb positron",
+        opacity=1
+    )
+
+    for index, edge in originedges.iterrows():
+        value = edge['value']
+        color = colorpicker(value)
+        origincoordinates = edge['geometry'].coords.xy
+        origincoord_tuples = list(zip(origincoordinates[1], origincoordinates[0]))
+
+        folium.PolyLine(
+            locations=origincoord_tuples,
+            color=color,
+            weight=10,
+            opacity=1,
+            tooltip="Fastest Route"
+        ).add_to(m)
+
+    for index_alt, edge_alt in alternateedges.iterrows():
+        value = edge_alt['value']
+        color = colorpicker(value)
+        altcoordinates = edge_alt['geometry'].coords.xy
+        altcoord_tuples = list(zip(altcoordinates[1], altcoordinates[0]))
+
+        folium.PolyLine(
+            locations=altcoord_tuples,
+            color=color,
+            weight=10,
+            opacity=1,
+            tooltip="Lower Pollution Alternative"
+        ).add_to(m)
+
+    return m.save('test.html')
+
+
+drawfig(graph, edges_values, alt_edges_values)
