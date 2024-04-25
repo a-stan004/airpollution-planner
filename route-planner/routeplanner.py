@@ -1,6 +1,5 @@
 import osmnx as ox
 from osmnx import routing
-# from osmnx import folium
 import networkx as nx
 import geopandas as gpd
 import pandas as pd
@@ -42,7 +41,10 @@ class MyWindow(QWidget):
 
         self.progress = QProgressBar(self)
         self.progress.setAlignment(Qt.AlignCenter)
-        self.input3_label = QLabel('Enter values to begin')
+
+        self.warning = QLabel('')
+
+        self.input3_label = QLabel('')
         self.input3_label.setAlignment(Qt.AlignCenter)
 
         self.view = QtWebEngineWidgets.QWebEngineView(parent=None)
@@ -60,6 +62,7 @@ class MyWindow(QWidget):
 
         vbox.addLayout(hbox1)
         vbox.addLayout(hbox2)
+        vbox.addWidget(self.warning)
         vbox.addWidget(run_button)
         vbox.addWidget(self.progress)
         vbox.addWidget(self.input3_label)
@@ -69,6 +72,7 @@ class MyWindow(QWidget):
 
         self.input3_label.hide()
         self.progress.hide()
+        self.warning.hide()
         self.setLayout(vbox)
 
 # ==========================================================================
@@ -118,25 +122,58 @@ class MyWindow(QWidget):
                 # Class instance created for nominatim tool
                 loc = Nominatim(user_agent="Geopy Library")
                 initloc = loc.geocode(self.initial)
-                geocodeinit = [initloc.address, initloc.latitude, initloc.longitude]
                 targetloc = loc.geocode(self.target)
-                geocodetarget = [targetloc.address, targetloc.latitude, targetloc.longitude]
+                try:
+                    geocodeinit = [initloc.address, initloc.latitude, initloc.longitude]
+                    geocodetarget = [targetloc.address, targetloc.latitude, targetloc.longitude]
+                except AttributeError:
+                    geocodeinit = "Fail"
+                    geocodetarget = "Fail"
+                    return geocodeinit, geocodetarget
                 return geocodeinit, geocodetarget
 
-        self.input3_label.show()
-        self.progress.show()
-        self.progress.setValue(0)
-        self.input3_label.setText('Process starting...')
+
         start = self.input1_text.text()
         end = self.input2_text.text()
         # Creates class instance of Inputs with two user inputs
         userinputs = Inputs(start, end)
+
         geo_initial = userinputs.geocodeaddresses()[0]
-        print(geo_initial)
         geo_target = userinputs.geocodeaddresses()[1]
-        print(geo_target)
-        self.progress.setValue(30)
-        self.input3_label.setText('Geolocated start and end points')
+
+        if geo_initial == 'Fail' and geo_target == 'Fail':
+
+            self.warning.setText('One or more addresses could not be located')
+            self.warning.show()
+            self.input1_text.setText("")
+            self.input2_text.setText("")
+            return
+
+        def checkboundary(geocodedinital, geocodedtarget):
+            init_latlong = geocodedinital[-2], geocodedinital[-1]
+            target_latlong = geocodedtarget[-2], geocodedtarget[-1]
+            if (obtainvalue(init_latlong[0], init_latlong[1], 'no2') == 0 or None or
+                    obtainvalue(target_latlong[0], target_latlong[1], 'no2') == 0 or None):
+                in_london = False
+                return in_london
+            else:
+                in_london = True
+                return in_london
+
+        in_london_status = checkboundary(geo_initial, geo_target)
+
+        if not in_london_status:
+            self.warning.show()
+            self.warning.setText('One or more locations outside of Greater London boundary')
+            return
+
+        self.warning.hide()
+        self.input3_label.show()
+        self.progress.show()
+        self.input3_label.setText('Locating start and end points...')
+        self.progress.setValue(20)
+
+
 
 
         # ==========================================================================
@@ -230,6 +267,8 @@ class MyWindow(QWidget):
             limits = (pm2_5value, pm10value, no2value)
             return limits
 
+        self.progress.setValue(50)
+        self.input3_label.setText('Drawing route between locations')
 
         # Variable created to store the geopandas data frame
         gdf = userlocations.gpdframe()
@@ -245,10 +284,15 @@ class MyWindow(QWidget):
 
         # Getting inital user locations and drawing initial graph and route
         usernodes = userlocations.getnodes()
-        route = nx.shortest_path(G=graph, source=usernodes[0], target=usernodes[1], weight="distance")
 
-        self.progress.setValue(50)
-        self.input3_label.setText('Drawing fastest route...')
+        try:
+            route = nx.shortest_path(G=graph, source=usernodes[0], target=usernodes[1], weight="distance")
+        except NetworkXNoPath:
+            self.warning.show()
+            self.warning.setText("Unable to draw a route between locations, check addresses and retry")
+            self.progress.hide()
+            self.input3_label.hide()
+            return
 
         limits = limitervalues()
         tolerance = 1
@@ -367,6 +411,8 @@ class MyWindow(QWidget):
             except NetworkXNoPath:
                 return False
 
+        self.progress.setValue(70)
+        self.input3_label.setText('Checking pollution along route')
 
         # Attempts to make a valid path
         valid_path = process_path(route)
@@ -423,11 +469,15 @@ class MyWindow(QWidget):
                 route_values = {'edges': figroute, 'values': edges['avgvalue'].tolist()}
             return route_values
 
+
+        self.progress.setValue(90)
+        self.input3_label.setText('Drawing routes')
+
         edges_values = edgepollution(graph, route)
         alt_edges_values = edgepollution(graph, attempt)
 
-        self.progress.setValue(70)
-        self.input3_label.setText('Getting low-pollution alternative...')
+        self.progress.setValue(80)
+        self.input3_label.setText('Finding lower pollution route')
 
         def colorpicker(value):
             if value < 10:
@@ -447,7 +497,7 @@ class MyWindow(QWidget):
             return color
 
 
-        def drawfig(foliumgraph, foliumroute, foliumalt):
+        def drawfig(foliumgraph, foliumroute, foliumalt, initial, target):
             """
             Takes two routes and their associated graph, and constructs a folium map
             Requires obtainvalue() script from raster.py
@@ -464,7 +514,8 @@ class MyWindow(QWidget):
             alternateedges = ox.routing.route_to_gdf(foliumgraph, foliumalt['edges'], weight='length')
             alternateedges['value'] = foliumalt['values']
 
-            center = [originedges.iloc[0]['geometry'].centroid.y, originedges.iloc[0]['geometry'].centroid.x]
+            center = [((float(geo_initial[1])+float(geo_target[1]))/2),
+                      ((float(geo_initial[2])+float(geo_target[2]))/2)]
             m = folium.Map(
                 location=center,
                 zoom_start=14,
@@ -500,18 +551,26 @@ class MyWindow(QWidget):
                     tooltip="Lower Pollution Alternative"
                 ).add_to(m)
 
+            folium.Marker(
+                location=[initial[1], initial[2]],
+                tooltip='Start',
+                icon=folium.Icon(color='green')
+            ).add_to(m)
+
+            folium.Marker(
+                location=[target[1], target[2]],
+                tooltip='End',
+                icon=folium.Icon(color='green')
+            ).add_to(m)
+
             return m
 
-        self.progress.setValue(90)
-        self.input3_label.setText('Creating map...')
-        folmap = drawfig(graph, edges_values, alt_edges_values)
+        folmap = drawfig(graph, edges_values, alt_edges_values, geo_initial, geo_target)
         print("folmap achieved")
         data = io.BytesIO()
         folmap.save(data, close_file=False)
         print("folmap saved")
         self.view.setHtml(data.getvalue().decode())
-        self.progress.setValue(100)
-        self.input3_label.setText('Complete')
         self.input3_label.hide()
         self.progress.hide()
 
