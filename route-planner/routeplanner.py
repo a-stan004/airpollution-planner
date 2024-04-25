@@ -8,7 +8,7 @@ from networkx import NetworkXNoPath
 from raster import obtainvalue
 import folium
 from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-                             QPushButton, QProgressBar)
+                             QPushButton, QProgressBar, QRadioButton)
 from PyQt5 import QtWebEngineWidgets
 from PyQt5.QtCore import Qt
 import io
@@ -18,23 +18,30 @@ import sys
 # Setting up UI classes
 # ==========================================================================
 
-
 class MyWindow(QWidget):
     def __init__(self):
         super().__init__(parent=None)
         self.initwindow()
+        self.nettype = "walk"
 
     def initwindow(self):
         self.setWindowTitle(self.tr("MAP PROJECT"))
-        self.setMinimumSize(750, 750)
+        self.setMinimumSize(900, 900)
         self.overallui()
 
     def overallui(self):
 
         input1_label = QLabel('Start:')
         self.input1_text = QLineEdit()
-        input2_label = QLabel('End:')
+        input2_label = QLabel('End: ')
         self.input2_text = QLineEdit()
+
+        self.radio_walk = QRadioButton("Walk", self)
+        self.radio_walk.setChecked(True)
+        self.radio_cycle = QRadioButton("Cycle", self)
+
+        self.radio_walk.toggled.connect(self.selection)
+        self.radio_cycle.toggled.connect(self.selection)
 
         run_button = QPushButton('Find Route')
         run_button.clicked.connect(self.runscript)
@@ -49,10 +56,16 @@ class MyWindow(QWidget):
 
         self.view = QtWebEngineWidgets.QWebEngineView(parent=None)
 
+        self.distshortest = QLabel('')
+        self.distalt = QLabel('')
+        self.samepath = QLabel('')
+
         # Layout setup
         vbox = QVBoxLayout()
         hbox1 = QHBoxLayout()
         hbox2 = QHBoxLayout()
+        hbox3 = QHBoxLayout()
+        hbox4 = QHBoxLayout()
 
         hbox1.addWidget(input1_label)
         hbox1.addWidget(self.input1_text)
@@ -60,15 +73,28 @@ class MyWindow(QWidget):
         hbox2.addWidget(input2_label)
         hbox2.addWidget(self.input2_text)
 
+        hbox3.addWidget(self.radio_walk)
+        hbox3.addWidget(self.radio_cycle)
+        hbox3.setSpacing(20)
+        hbox3.setAlignment(Qt.AlignCenter)
+
+        hbox4.addWidget(self.distshortest)
+        hbox4.addWidget(self.distalt)
+        hbox4.setSpacing(20)
+        hbox4.setAlignment(Qt.AlignCenter)
+
         vbox.addLayout(hbox1)
         vbox.addLayout(hbox2)
+        vbox.addLayout(hbox3)
         vbox.addWidget(self.warning)
         vbox.addWidget(run_button)
         vbox.addWidget(self.progress)
         vbox.addWidget(self.input3_label)
         vbox.addWidget(self.view)
         vbox.setStretchFactor(self.view, 1)
-        vbox.setSpacing(5)
+        vbox.addLayout(hbox4)
+        vbox.addWidget(self.samepath)
+        vbox.setSpacing(20)
 
         self.input3_label.hide()
         self.progress.hide()
@@ -78,6 +104,13 @@ class MyWindow(QWidget):
 # ==========================================================================
 # Gathering inputs and geocoding
 # ==========================================================================
+    def selection(self):
+        if self.radio_walk.isChecked():
+            self.nettype = "walk"
+        elif self.radio_cycle.isChecked():
+            self.nettype = "bike"
+        else:
+            self.nettype = "walk"
 
     def runscript(self):
         class Inputs:
@@ -172,9 +205,7 @@ class MyWindow(QWidget):
         self.progress.show()
         self.input3_label.setText('Locating start and end points...')
         self.progress.setValue(20)
-
-
-
+        self.samepath.hide()
 
         # ==========================================================================
         # Constructing a graph for the area
@@ -279,8 +310,7 @@ class MyWindow(QWidget):
         # Expanding the search area using a buffer so that routes are not limited
         buffbox = box.buffer(0.01)
 
-        # Constructing the graph using OSMnx
-        graph = ox.graph_from_polygon(buffbox, network_type='bike', truncate_by_edge=False, retain_all=True)
+        graph = ox.graph_from_polygon(buffbox, network_type=self.nettype, truncate_by_edge=False, retain_all=True)
 
         # Getting inital user locations and drawing initial graph and route
         usernodes = userlocations.getnodes()
@@ -293,6 +323,12 @@ class MyWindow(QWidget):
             self.progress.hide()
             self.input3_label.hide()
             return
+
+        shortest_edges = ox.routing.route_to_gdf(graph, route)
+        shortest_length = sum(shortest_edges['length'])
+        shortest_length_round = round((shortest_length/1000), 2)
+        self.distshortest.show()
+        self.distshortest.setText(f'Shortest Path: {shortest_length_round}km')
 
         limits = limitervalues()
         tolerance = 1
@@ -434,6 +470,16 @@ class MyWindow(QWidget):
                 valid_path = process_path(attempt)
 
         print("Path found")
+        alt_edges = ox.routing.route_to_gdf(graph, attempt)
+        alt_length = sum(alt_edges['length'])
+        alt_length_rounded = round((alt_length/1000), 2)
+        self.distalt.show()
+        self.distalt.setText(f'Alternative Path: {alt_length_rounded}km')
+        if alt_length == shortest_length:
+            self.distalt.hide()
+            self.distshortest.hide()
+            self.samepath.show()
+            self.samepath.setText('No identifiable lower pollution path. Pollution along route is low.')
 
         # Coloring of routes and drawing to folium
         def edgepollution(figgraph, figroute):
@@ -470,13 +516,13 @@ class MyWindow(QWidget):
             return route_values
 
 
-        self.progress.setValue(90)
+        self.progress.setValue(80)
         self.input3_label.setText('Drawing routes')
 
         edges_values = edgepollution(graph, route)
         alt_edges_values = edgepollution(graph, attempt)
 
-        self.progress.setValue(80)
+        self.progress.setValue(90)
         self.input3_label.setText('Finding lower pollution route')
 
         def colorpicker(value):
@@ -573,6 +619,7 @@ class MyWindow(QWidget):
         self.view.setHtml(data.getvalue().decode())
         self.input3_label.hide()
         self.progress.hide()
+
 
 
 if __name__ == '__main__':
