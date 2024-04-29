@@ -1,71 +1,182 @@
+# ==========================================================================
+# 1.0 Importing packages, modules and scripts
+# ==========================================================================
+
+# Import networking packages, modules and errors
 import osmnx as ox
 from osmnx import routing
 import networkx as nx
+from networkx import NetworkXNoPath
+
+# Import general geographical data packages
 import geopandas as gpd
 import pandas as pd
 from geopy import Nominatim
-from networkx import NetworkXNoPath
+
+# Import raster function from raster script
 from raster import obtainvalue
-import folium
+
+# Import PyQt elements, folium and sys/io for UI
 from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
                              QPushButton, QProgressBar, QRadioButton)
 from PyQt5 import QtWebEngineWidgets
 from PyQt5.QtCore import Qt
-import io
+import folium
 import sys
+import io
+
 
 # ==========================================================================
-# Setting up UI classes
+# 2.0 Setting up PyQt UI class and building widgets
 # ==========================================================================
+
 
 class MyWindow(QWidget):
+    """
+    Window class for PyQt UI
+
+    Attributes
+        (self)
+
+    Methods
+        .__init___(): Constructs the window object
+        .initwindow(): Sets title, size and defines global window variables
+        .overallui(): Constructs the layout and widgets for the UI
+        .selection(): Method which takes the input of the radio walk/cycle boxes and adds this to main script
+        .runscript(): Rest of main script is housed here so it can be called as one within the window class
+
+    """
+
+    # Constructs window object, window attributes requiring change must be defined at __init__ in first instance
     def __init__(self):
         super().__init__(parent=None)
+        self.input1_text = None
+        self.input2_text = None
+        self.radio_walk = None
+        self.radio_cycle = None
+        self.progress = None
+        self.progress_label = None
+        self.warning = None
+        self.view = None
+        self.legend1 = None
+        self.legend2 = None
+        self.legend3 = None
+        self.legend4 = None
+        self.legend5 = None
+        self.legend6 = None
+        self.legend7 = None
+        self.legend8 = None
+        self.distshortest = None
+        self.distalt = None
+        self.samepath = None
         self.initwindow()
         self.nettype = "walk"
 
+    # Sets the size and title of box and calls the overallui method to construct widgets and layouts
     def initwindow(self):
-        self.setWindowTitle(self.tr("MAP PROJECT"))
-        self.setMinimumSize(900, 900)
+        self.setWindowTitle(self.tr("Route Planner"))
+        self.setMinimumSize(900, 1200)
         self.overallui()
 
+    # Widgets and layouts constructed
     def overallui(self):
 
+        # Logo at top of window
+        logo1 = QLabel('London Plan')
+        logo1.setStyleSheet('color: black; font-weight: bold; font-size: 20pt')
+        logo2 = QLabel('AIR')
+        logo2.setStyleSheet('color: darkgreen; font-weight: bold; font-size: 28pt; font-style: italic')
+
+        # Description paragraph beneath logo
+        description = QLabel('This tool allows you to plan lower pollution versions of your '
+                             'normal walking or cycling routes. <br><br>'
+                             'To start input your start and end locations. These can be in many formats such '
+                             'as postcodes, street names, or even attractions such as Tower Bridge. Then '
+                             'click FIND ROUTE. <br><br>'
+                             'Hover over routes to see information. Pollution values are indicated '
+                             'in the legend below. This tool currently only works for Greater London locations. Longer '
+                             'routes may take a while to load - do not close the window even if '
+                             'unresponsive for a while.')
+        description.setStyleSheet('font-size: 7pt; font-weight: normal')
+        description.setWordWrap(True)
+        description.setAlignment(Qt.AlignCenter)
+
+        # Start and end input boxes
         input1_label = QLabel('Start:')
+        input1_label.setStyleSheet('font-size: 9pt; font-weight: bold')
         self.input1_text = QLineEdit()
         input2_label = QLabel('End: ')
+        input2_label.setStyleSheet('font-size: 9pt; font-weight: bold')
         self.input2_text = QLineEdit()
 
+        # Radio buttons for walk or cycle selection
         self.radio_walk = QRadioButton("Walk", self)
+        self.radio_walk.setStyleSheet('font-size: 9pt; font-weight: bold')
         self.radio_walk.setChecked(True)
         self.radio_cycle = QRadioButton("Cycle", self)
-
+        self.radio_cycle.setStyleSheet('font-size: 9pt; font-weight: bold')
+        # Connected to selection method which triggers when selection is made
         self.radio_walk.toggled.connect(self.selection)
         self.radio_cycle.toggled.connect(self.selection)
 
+        # Run button triggers main script to be ran
         run_button = QPushButton('Find Route')
+        run_button.setStyleSheet('font-size: 9pt; font-weight: bold; background-color: darkgreen; color: white')
         run_button.clicked.connect(self.runscript)
 
+        # Progress bar
         self.progress = QProgressBar(self)
         self.progress.setAlignment(Qt.AlignCenter)
+        self.progress_label = QLabel('')
+        self.progress_label.setAlignment(Qt.AlignCenter)
 
+        # Error warning labels
         self.warning = QLabel('')
+        self.warning.setStyleSheet('color: red; font-weight: normal')
 
-        self.input3_label = QLabel('')
-        self.input3_label.setAlignment(Qt.AlignCenter)
-
+        # View window for folium map
         self.view = QtWebEngineWidgets.QWebEngineView(parent=None)
 
+        # Legend items, defined seperately to allow different colors
+        self.legend1 = QLabel('<10')
+        self.legend1.setStyleSheet('background-color: #40b81c; color: black')
+        self.legend2 = QLabel('<20')
+        self.legend2.setStyleSheet('background-color: #d1d119; color: black')
+        self.legend3 = QLabel('<30')
+        self.legend3.setStyleSheet('background-color: #d1a619; color: black')
+        self.legend4 = QLabel('<40')
+        self.legend4.setStyleSheet('background-color: #d14419; color: black')
+        self.legend5 = QLabel('<50')
+        self.legend5.setStyleSheet('background-color: #9c1919; color: white')
+        self.legend6 = QLabel('<60')
+        self.legend6.setStyleSheet('background-color: #3d0101; color: white')
+        self.legend7 = QLabel('60+')
+        self.legend7.setStyleSheet('background-color: #000000; color: white')
+        self.legend8 = QLabel('µg/m3')
+
+        # Route distance labels and warning message if routes are the same
         self.distshortest = QLabel('')
         self.distalt = QLabel('')
         self.samepath = QLabel('')
 
+# ==========================================================================
+# 3.0 Setting up PyQt UI layout
+# ==========================================================================
+
         # Layout setup
+        # Vertical box
         vbox = QVBoxLayout()
+        # Horizontal sections
+        logo = QHBoxLayout()
         hbox1 = QHBoxLayout()
         hbox2 = QHBoxLayout()
         hbox3 = QHBoxLayout()
         hbox4 = QHBoxLayout()
+        hbox5 = QHBoxLayout()
+
+        # Adding widgets section layouts
+        logo.addWidget(logo1)
+        logo.addWidget(logo2)
 
         hbox1.addWidget(input1_label)
         hbox1.addWidget(self.input1_text)
@@ -83,28 +194,53 @@ class MyWindow(QWidget):
         hbox4.setSpacing(20)
         hbox4.setAlignment(Qt.AlignCenter)
 
+        hbox5.addWidget(self.legend1)
+        hbox5.addWidget(self.legend2)
+        hbox5.addWidget(self.legend3)
+        hbox5.addWidget(self.legend4)
+        hbox5.addWidget(self.legend5)
+        hbox5.addWidget(self.legend6)
+        hbox5.addWidget(self.legend7)
+        hbox5.addWidget(self.legend8)
+
+        # Vertical box overall construction
+        vbox.addLayout(logo)
+        logo.setSpacing(0)
+        logo.setAlignment(Qt.AlignCenter)
+        vbox.addWidget(description)
         vbox.addLayout(hbox1)
         vbox.addLayout(hbox2)
-        vbox.addLayout(hbox3)
         vbox.addWidget(self.warning)
+        vbox.addLayout(hbox3)
         vbox.addWidget(run_button)
         vbox.addWidget(self.progress)
-        vbox.addWidget(self.input3_label)
+        vbox.addWidget(self.progress_label)
         vbox.addWidget(self.view)
         vbox.setStretchFactor(self.view, 1)
+        vbox.addLayout(hbox5)
         vbox.addLayout(hbox4)
         vbox.addWidget(self.samepath)
         vbox.setSpacing(20)
 
-        self.input3_label.hide()
+        # Hiding unneeded start elements
+        self.progress_label.hide()
         self.progress.hide()
         self.warning.hide()
         self.setLayout(vbox)
 
-# ==========================================================================
-# Gathering inputs and geocoding
-# ==========================================================================
     def selection(self):
+        """
+        Checks which radio button is selected and changes global window variable
+        This means the osmnx graph will choose the correct transport choice
+
+        Attributes
+            (self)
+
+        Methods
+            (none)
+
+        """
+
         if self.radio_walk.isChecked():
             self.nettype = "walk"
         elif self.radio_cycle.isChecked():
@@ -112,7 +248,40 @@ class MyWindow(QWidget):
         else:
             self.nettype = "walk"
 
+# ==========================================================================
+# 4.0 Running low-pollution route finder script
+# ==========================================================================
+
     def runscript(self):
+        """
+        Runs the main script which results in a folium route map being contructed
+
+        Classes
+            Inputs: User inputs for start and end locations
+            Locations: Route class, with start, end, lat, long information
+
+        Attributes
+            (self)
+
+        Methods
+            checkboundary(): Checks if coordinates are within the Greater London boundary
+            limitervalues(): Defines allowable air pollution limits for route calculation
+            geolocation(): Takes a node as input and returns x, y values
+            get_geo_data(): Gathers pollution data for nodes using obtainvalue raster function
+            compare(): Compares node pollution values to limits
+            good_node(): Checks if a node is within limits
+            process_path(): Checks all the nodes in a route for nodes exceeding limits
+            restricted_path(): Tries to construct a route with high pollution value nodes removed
+            edgepollution(): Creates index of pollution and adds to graph edges
+            colorpicker(): Chooses color based on pollution value
+            drawfig(): Constructs a folium map of routes
+
+        """
+
+# ==========================================================================
+# 4.1 Getting user inputs and geocoding locations
+# ==========================================================================
+
         class Inputs:
             """
             Class representing user inputs
@@ -126,9 +295,10 @@ class MyWindow(QWidget):
                 .geocodeaddresses(): Geocodes the inputs
 
             """
+
             def __init__(self, initial, target):
                 """
-                Constructs all the necessary attributes for the person object.
+                Constructs all the necessary attributes for the inputs object.
 
                 Args
                     initial(str): Initial location
@@ -165,7 +335,7 @@ class MyWindow(QWidget):
                     return geocodeinit, geocodetarget
                 return geocodeinit, geocodetarget
 
-
+        # Get inputs from PyQt input boxes
         start = self.input1_text.text()
         end = self.input2_text.text()
         # Creates class instance of Inputs with two user inputs
@@ -174,8 +344,8 @@ class MyWindow(QWidget):
         geo_initial = userinputs.geocodeaddresses()[0]
         geo_target = userinputs.geocodeaddresses()[1]
 
+        # If geocoding returns a fail from the try/except block warning is displayed
         if geo_initial == 'Fail' and geo_target == 'Fail':
-
             self.warning.setText('One or more addresses could not be located')
             self.warning.show()
             self.input1_text.setText("")
@@ -183,6 +353,17 @@ class MyWindow(QWidget):
             return
 
         def checkboundary(geocodedinital, geocodedtarget):
+            """
+            Takes a latitude and longitude and checks whether it is in the Greater London boundary
+            This is done by sampling the raster and checking for 0 or Null values
+
+            Args
+                geocodedinital (list): Input class style list with location, latitude, longitude of start location
+                geocodedtarget (list): Input class style list with location, latitude, longitude of end location
+
+            Returns
+                in_london (bool): True or false of whether location is within Greater London boundary
+            """
             init_latlong = geocodedinital[-2], geocodedinital[-1]
             target_latlong = geocodedtarget[-2], geocodedtarget[-1]
             if (obtainvalue(init_latlong[0], init_latlong[1], 'no2') == 0 or None or
@@ -195,25 +376,28 @@ class MyWindow(QWidget):
 
         in_london_status = checkboundary(geo_initial, geo_target)
 
+        # If Greater London check returns False then a warning is displayed
         if not in_london_status:
             self.warning.show()
             self.warning.setText('One or more locations outside of Greater London boundary')
             return
 
+# ==========================================================================
+# 4.2 Processing initial fastest route
+# ==========================================================================
+
+        # Hiding warnings and starting progress bar
         self.warning.hide()
-        self.input3_label.show()
+        self.progress_label.show()
         self.progress.show()
-        self.input3_label.setText('Locating start and end points...')
+        self.progress_label.setText('Locating start and end points...')
         self.progress.setValue(20)
         self.samepath.hide()
 
-        # ==========================================================================
-        # Constructing a graph for the area
-        # ==========================================================================
-
         class Locations:
             """
-            Class representing users locations
+            Class representing users locations, capable of producing geodataframes and nodes
+            Attributes easiest constructed using Nomantim tool within the Inputs class
 
             Attributes
                 places (list): List of addresses
@@ -238,6 +422,7 @@ class MyWindow(QWidget):
 
                 Returns
                     None
+
                 """
                 self.places = places
                 self.latitudes = latitudes
@@ -251,6 +436,7 @@ class MyWindow(QWidget):
 
                 Returns
                     geodf(geopandas.geodataframe.GeoDataFrame): Geodataframe of the given inputs
+
                 """
                 df = pd.DataFrame({
                     "Places": self.places,
@@ -271,6 +457,7 @@ class MyWindow(QWidget):
                 Returns
                     orig_node (int): Node ID of nearest node on graph to initial location
                     target_node (int): Node ID of nearest node on graph to target location
+
                 """
                 orig_node = ox.nearest_nodes(graph, self.longitudes[0], self.latitudes[0])
                 target_node = ox.nearest_nodes(graph, self.longitudes[1], self.latitudes[1])
@@ -278,15 +465,25 @@ class MyWindow(QWidget):
 
         # Creates an instance of the Locations class from the users earlier inputs
         userlocations = Locations(
-        [geo_initial[0], geo_target[0]],
-        [geo_initial[1], geo_target[1]],
-        [geo_initial[2], geo_target[2]],
+            [geo_initial[0], geo_target[0]],
+            [geo_initial[1], geo_target[1]],
+            [geo_initial[2], geo_target[2]],
         )
 
-
-        # Get initial limiter values
         def limitervalues():
-            # Safe limits for air pollution 2005 WHO
+            """
+            Returns a tuple of three values used as pollution limits
+            Allows one place to change values rather than constant redefinition
+
+            Args
+                (none)
+
+            Returns
+                chosenlimits (tuple): Tuple of PM2.5, PM10 and NO2 values
+
+            """
+
+            # Safe limits for air pollution - World Health Organisation
             who2005 = {
                 "pm2_5": 10,
                 "pm10": 20,
@@ -295,55 +492,56 @@ class MyWindow(QWidget):
             pm2_5value = float(who2005["pm2_5"])
             pm10value = float(who2005["pm10"])
             no2value = float(who2005["no2"])
-            limits = (pm2_5value, pm10value, no2value)
-            return limits
+            chosenlimits = (pm2_5value, pm10value, no2value)
+            return chosenlimits
 
+        # Updating progress bar
         self.progress.setValue(50)
-        self.input3_label.setText('Drawing route between locations')
+        self.progress_label.setText('Drawing route between locations')
 
         # Variable created to store the geopandas data frame
         gdf = userlocations.gpdframe()
-
-        # Creating a polygon of the search area
+        # Creating a polygon of the search area and buffering it so that routes are not limited
         box = gdf.unary_union.envelope
-
-        # Expanding the search area using a buffer so that routes are not limited
         buffbox = box.buffer(0.01)
 
+        # Drawing graph of buffered area with correct transport type
         graph = ox.graph_from_polygon(buffbox, network_type=self.nettype, truncate_by_edge=False, retain_all=True)
-
-        # Getting inital user locations and drawing initial graph and route
+        # Getting location nodes and drawing initial route
         usernodes = userlocations.getnodes()
 
+        # If inital route cannot be drawn an error message is displayed
         try:
             route = nx.shortest_path(G=graph, source=usernodes[0], target=usernodes[1], weight="distance")
         except NetworkXNoPath:
             self.warning.show()
             self.warning.setText("Unable to draw a route between locations, check addresses and retry")
             self.progress.hide()
-            self.input3_label.hide()
+            self.progress_label.hide()
             return
 
+        # Gathering route length and rounding to 2 decimal places
         shortest_edges = ox.routing.route_to_gdf(graph, route)
         shortest_length = sum(shortest_edges['length'])
-        shortest_length_round = round((shortest_length/1000), 2)
-        self.distshortest.show()
-        self.distshortest.setText(f'Shortest Path: {shortest_length_round}km')
+        shortest_length_round = round((shortest_length / 1000), 2)
 
+# ==========================================================================
+# 4.3 Finding lower pollution route
+# ==========================================================================
+
+        # Defining limits and initial tolerance
         limits = limitervalues()
         tolerance = 1
 
-        # Set up a location to store pollution values that are high
+        # Setting up a location to store pollution values that are high
         geo_cache = {}
 
-        # Take graph and make it into a geodataframe
+        # Converting graph into geodataframe
         geo_data = ox.graph_to_gdfs(graph, nodes=True, edges=False)
-
 
         # Unordered sets created to store nodes
         all_nodes = set(graph.nodes())
         bad_nodes = set()
-
 
         def get_location(node):
             """
@@ -359,7 +557,6 @@ class MyWindow(QWidget):
             x = row.x
             y = row.y
             return x, y
-
 
         def get_geo_data(node):
             """
@@ -380,7 +577,6 @@ class MyWindow(QWidget):
                 )
             return geo_cache[node]
 
-
         def compare(values, limiters):
             """
             Compares node pollution values to limits
@@ -392,9 +588,6 @@ class MyWindow(QWidget):
             """
             within = all(value < limiter * tolerance for value, limiter in zip(values, limiters))
             return within
-
-
-
 
         def good_node(node):
             """
@@ -409,7 +602,6 @@ class MyWindow(QWidget):
                 return True
             goodbool = compare(get_geo_data(node), limits)
             return goodbool
-
 
         def process_path(path):
             """
@@ -427,7 +619,6 @@ class MyWindow(QWidget):
                     bad_nodes.add(node)
                     good_path = False
             return good_path
-
 
         def restricted_path(res_graph):
             """
@@ -447,44 +638,37 @@ class MyWindow(QWidget):
             except NetworkXNoPath:
                 return False
 
+        # Update progress bar
         self.progress.setValue(70)
-        self.input3_label.setText('Checking pollution along route')
+        self.progress_label.setText('Checking pollution along route')
 
         # Attempts to make a valid path
         valid_path = process_path(route)
-        # route_possible = True
 
-        # Counter for how many attempts
-        counter = 1
+        # Blank attempt to add nodes to
         attempt = []
 
-        # Where valid path has not been found, while loop reattempts route by resetting bad nodes and upping limit tolerances
+        # Where no valid path, while loop reattempts route by resetting bad nodes and upping limit tolerances
         while not valid_path:
-            print(f"Attempt: {counter}, tolerance:{tolerance}")
             attempt = restricted_path(graph)
-            counter += 1
             if not attempt:
                 tolerance *= 1.5
                 bad_nodes = set()
             else:
                 valid_path = process_path(attempt)
 
-        print("Path found")
+        # Gathering route length and rounding to 2 decimal places
         alt_edges = ox.routing.route_to_gdf(graph, attempt)
         alt_length = sum(alt_edges['length'])
-        alt_length_rounded = round((alt_length/1000), 2)
-        self.distalt.show()
-        self.distalt.setText(f'Alternative Path: {alt_length_rounded}km')
-        if alt_length == shortest_length:
-            self.distalt.hide()
-            self.distshortest.hide()
-            self.samepath.show()
-            self.samepath.setText('No identifiable lower pollution path. Pollution along route is low.')
+        alt_length_rounded = round((alt_length / 1000), 2)
 
-        # Coloring of routes and drawing to folium
+# ==========================================================================
+# 4.4 Styling routes based on pollution
+# ==========================================================================
+
         def edgepollution(figgraph, figroute):
             """
-            Takes a route and its associated graph, and returns an index of pollution based on three pollutants for each edge
+            Takes a route and its associated graph, and returns an edge index of pollution based on three pollutants
             Requires obtainvalue() script from raster.py
 
             Args
@@ -494,7 +678,9 @@ class MyWindow(QWidget):
                 route_values (dict):
                     'edges': Edge number
                     'values': Pollutant index
+
             """
+
             edges = ox.routing.route_to_gdf(figgraph, figroute, weight='length')
             nodes = ox.graph_to_gdfs(figgraph, nodes=True, edges=False)
             edges.sort_index(inplace=True)
@@ -515,17 +701,26 @@ class MyWindow(QWidget):
                 route_values = {'edges': figroute, 'values': edges['avgvalue'].tolist()}
             return route_values
 
-
+        # Update progress bar
         self.progress.setValue(80)
-        self.input3_label.setText('Drawing routes')
+        self.progress_label.setText('Drawing routes')
 
+        # Getting edge colors
         edges_values = edgepollution(graph, route)
         alt_edges_values = edgepollution(graph, attempt)
 
-        self.progress.setValue(90)
-        self.input3_label.setText('Finding lower pollution route')
-
         def colorpicker(value):
+            """
+            Takes float and returns a color from green to red to black scale based on how high the integer is
+
+            Args
+                value (float): Pollution edge value
+
+            Returns
+                color (string): Hexcode of color
+
+            """
+
             if value < 10:
                 color = "#40b81c"
             elif value < 20:
@@ -542,7 +737,6 @@ class MyWindow(QWidget):
                 color = "#000000"
             return color
 
-
         def drawfig(foliumgraph, foliumroute, foliumalt, initial, target):
             """
             Takes two routes and their associated graph, and constructs a folium map
@@ -552,7 +746,7 @@ class MyWindow(QWidget):
                 figgraph (MultiDiGraph): OSMnx pre-built graph as input
                 figroute (list): OSMnx list of node values constructed using routing module
             Returns
-                map (.html): Saves a html file of final route
+                m (map) (.html): Saves a html file of final route
             """
             originedges = ox.routing.route_to_gdf(foliumgraph, foliumroute['edges'], weight='length')
             originedges['value'] = foliumroute['values']
@@ -560,11 +754,20 @@ class MyWindow(QWidget):
             alternateedges = ox.routing.route_to_gdf(foliumgraph, foliumalt['edges'], weight='length')
             alternateedges['value'] = foliumalt['values']
 
-            center = [((float(geo_initial[1])+float(geo_target[1]))/2),
-                      ((float(geo_initial[2])+float(geo_target[2]))/2)]
+            if shortest_length_round > 12:
+                zoom = 11
+            elif shortest_length_round > 10:
+                zoom = 12
+            elif shortest_length_round > 5:
+                zoom = 13
+            else:
+                zoom = 14
+
+            center = [((float(geo_initial[1]) + float(geo_target[1])) / 2),
+                      ((float(geo_initial[2]) + float(geo_target[2])) / 2)]
             m = folium.Map(
                 location=center,
-                zoom_start=14,
+                zoom_start=zoom,
                 tiles="cartodb positron",
                 opacity=1
             )
@@ -611,26 +814,31 @@ class MyWindow(QWidget):
 
             return m
 
+        # Draw and temporarily save may
         folmap = drawfig(graph, edges_values, alt_edges_values, geo_initial, geo_target)
-        print("folmap achieved")
         data = io.BytesIO()
         folmap.save(data, close_file=False)
-        print("folmap saved")
+
+        # Write saved map to view window in UI
         self.view.setHtml(data.getvalue().decode())
-        self.input3_label.hide()
+
+        # Hide progress bar and display distances and warning if routes are the same
+        self.progress_label.hide()
         self.progress.hide()
+        self.distshortest.show()
+        self.distshortest.setText(f'Shortest Path: {shortest_length_round}km')
+        self.distalt.show()
+        self.distalt.setText(f'Alternative Path: {alt_length_rounded}km')
+        if alt_length == shortest_length:
+            self.distalt.hide()
+            self.distshortest.hide()
+            self.samepath.show()
+            self.samepath.setText('No identifiable lower pollution path. Pollution along route is low.')
 
 
-
+# Run application
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     window = MyWindow()
     window.show()
     sys.exit(app.exec_())
-
-
-
-
-
-
-
