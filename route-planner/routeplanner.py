@@ -470,31 +470,6 @@ class MyWindow(QWidget):
             [geo_initial[2], geo_target[2]],
         )
 
-        def limitervalues():
-            """
-            Returns a tuple of three values used as pollution limits
-            Allows one place to change values rather than constant redefinition
-
-            Args
-                (none)
-
-            Returns
-                chosenlimits (tuple): Tuple of PM2.5, PM10 and NO2 values
-
-            """
-
-            # Safe limits for air pollution - World Health Organisation
-            who2005 = {
-                "pm2_5": 10,
-                "pm10": 20,
-                "no2": 40
-            }
-            pm2_5value = float(who2005["pm2_5"])
-            pm10value = float(who2005["pm10"])
-            no2value = float(who2005["no2"])
-            chosenlimits = (pm2_5value, pm10value, no2value)
-            return chosenlimits
-
         # Updating progress bar
         self.progress.setValue(50)
         self.progress_label.setText('Drawing route between locations')
@@ -528,6 +503,30 @@ class MyWindow(QWidget):
 # ==========================================================================
 # 4.3 Finding lower pollution route
 # ==========================================================================
+        def limitervalues():
+            """
+            Returns a tuple of three values used as pollution limits
+            Allows one place to change values rather than constant redefinition
+
+            Args
+                (none)
+
+            Returns
+                chosenlimits (tuple): Tuple of PM2.5, PM10 and NO2 values
+
+            """
+
+            # Safe limits for air pollution - World Health Organisation
+            who2005 = {
+                "pm2_5": 10,
+                "pm10": 20,
+                "no2": 40
+            }
+            pm2_5value = float(who2005["pm2_5"])
+            pm10value = float(who2005["pm10"])
+            no2value = float(who2005["no2"])
+            chosenlimits = (pm2_5value, pm10value, no2value)
+            return chosenlimits
 
         # Defining limits and initial tolerance
         limits = limitervalues()
@@ -814,7 +813,7 @@ class MyWindow(QWidget):
 
             return m
 
-        # Draw and temporarily save may
+        # Draw and temporarily save map
         folmap = drawfig(graph, edges_values, alt_edges_values, geo_initial, geo_target)
         data = io.BytesIO()
         folmap.save(data, close_file=False)
@@ -836,7 +835,10 @@ class MyWindow(QWidget):
             self.samepath.setText('No identifiable lower pollution path. Pollution along route is low.')
 
 
-# Run application
+# ==========================================================================
+# 5.0 Running the application
+# ==========================================================================
+
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     window = MyWindow()
