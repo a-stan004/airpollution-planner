@@ -1,7 +1,7 @@
 ![Logo](/guide_images/logo.png)
 
 # Introduction
-A route planner for London cyclists with a specific focus on avoiding high pollution hotspots. Written in Python 3.2 using a PyQt GUI. Ulster University EGM722 Module Assessment.
+A route planner for London cyclists with a specific focus on avoiding high pollution hotspots. Written in Python 3.2 using a PyQt GUI. Ulster University EGM722 Module Assessment. 
 
 ## Contents
 - [Installation](#installation)
