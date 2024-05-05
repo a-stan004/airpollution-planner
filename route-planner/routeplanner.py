@@ -829,8 +829,8 @@ class MyWindow(QWidget):
         self.distalt.show()
         self.distalt.setText(f'Alternative Path: {alt_length_rounded}km')
         if alt_length == shortest_length:
-            self.distalt.hide()
-            self.distshortest.hide()
+            self.distalt.show()
+            self.distshortest.show()
             self.samepath.show()
             self.samepath.setText('No identifiable lower pollution path. Pollution along route is low.')
 
